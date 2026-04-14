@@ -2654,6 +2654,18 @@ def cmd_cron(args):
     cron_command(args)
 
 
+def cmd_backup(args):
+    """Backup Hermes configuration to a portable archive."""
+    from hermes_cli.backup import backup_command
+    backup_command(args)
+
+
+def cmd_restore(args):
+    """Restore Hermes configuration from a backup archive."""
+    from hermes_cli.backup import restore_command
+    restore_command(args)
+
+
 def cmd_webhook(args):
     """Webhook subscription management."""
     from hermes_cli.webhook import webhook_command
@@ -4804,6 +4816,47 @@ For more help on a command:
     ch_history.add_argument("--json", action="store_true", help="Output raw JSON")
 
     chronos_parser.set_defaults(func=cmd_chronos)
+
+    # =========================================================================
+    # backup command
+    # =========================================================================
+    backup_parser = subparsers.add_parser(
+        "backup",
+        help="Backup Hermes configuration to a portable archive",
+        description="Creates a .tar.gz archive of config, memory, skills, and scheduled jobs.",
+    )
+    backup_parser.add_argument(
+        "--output", "-o", default=None,
+        help="Output path for the archive (default: ~/.hermes/backups/hermes_<date>.tar.gz)"
+    )
+    backup_parser.add_argument(
+        "--include-sessions", action="store_true",
+        help="Include state.db (session history — can be large)"
+    )
+    backup_parser.add_argument(
+        "--no-secrets", action="store_true",
+        help="Exclude .env file (API keys) from the backup"
+    )
+    backup_parser.set_defaults(func=cmd_backup)
+
+    # =========================================================================
+    # restore command
+    # =========================================================================
+    restore_parser = subparsers.add_parser(
+        "restore",
+        help="Restore Hermes configuration from a backup archive",
+        description="Extracts a backup archive into the Hermes home directory.",
+    )
+    restore_parser.add_argument("archive", help="Path to the .tar.gz backup archive")
+    restore_parser.add_argument(
+        "--dry-run", action="store_true",
+        help="List files that would be restored without writing anything"
+    )
+    restore_parser.add_argument(
+        "--merge", action="store_true",
+        help="Restore without asking about overwrites (merge mode)"
+    )
+    restore_parser.set_defaults(func=cmd_restore)
 
     # =========================================================================
     # webhook command

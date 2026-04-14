@@ -51,7 +51,10 @@ class ScenarioSeed:
     external_event: str
     decision_style: str
     obstacle_level: str
-    key_decision: str = ""   # Optional forced decision point to test
+    key_decision: str = ""       # Optional forced decision point to test
+    # Entity-aware fields (populated when EntityGraph is available)
+    entity_context: str = ""     # Formatted world model for this scenario
+    key_actor_name: str = ""     # Which entity drives this scenario
 
 
 @dataclass
@@ -76,10 +79,37 @@ class SimulationResult:
 def generate_scenario_seeds(
     n: int,
     forced_decisions: Optional[List[str]] = None,
+    entity_graph=None,   # Optional[EntityGraph]
 ) -> List[ScenarioSeed]:
-    """Generate N diverse scenario seeds with varied parameters."""
+    """
+    Generate N diverse scenario seeds.
+
+    When an EntityGraph is provided, seeds include entity-aware context
+    (specific actors, their states, relationship shifts) making simulations
+    far more concrete than generic parameter variation.
+    """
+    # Optionally build entity-aware seed data
+    entity_seeds: List[Dict] = []
+    if entity_graph is not None and entity_graph.entities:
+        try:
+            from chronos.entity_graph import generate_entity_seeds
+            entity_seeds = generate_entity_seeds(entity_graph, n)
+        except Exception as e:
+            logger.debug("Entity seed generation failed, using generic: %s", e)
+
     seeds = []
     for i in range(n):
+        eseed = entity_seeds[i] if i < len(entity_seeds) else {}
+
+        # Format entity context string for the simulation prompt
+        entity_ctx = ""
+        if eseed and entity_graph is not None:
+            try:
+                from chronos.entity_graph import format_entity_context
+                entity_ctx = format_entity_context(entity_graph, eseed)
+            except Exception:
+                pass
+
         seed = ScenarioSeed(
             scenario_id=f"sim_{i:04d}",
             time_pressure=_TIME_PRESSURES[i % len(_TIME_PRESSURES)],
@@ -89,6 +119,8 @@ def generate_scenario_seeds(
             obstacle_level=_OBSTACLE_LEVELS[i % len(_OBSTACLE_LEVELS)],
             key_decision=(forced_decisions[i % len(forced_decisions)]
                           if forced_decisions else ""),
+            entity_context=entity_ctx,
+            key_actor_name=eseed.get("key_actor_name", ""),
         )
         seeds.append(seed)
     # Shuffle so the first batch isn't biased toward one axis
@@ -122,16 +154,32 @@ def _build_simulation_prompt(
         f"GOAL: {goal}",
         f"TIME HORIZON: {horizon_days} days",
         "",
-        "SIMULATION CONDITIONS:",
-        f"- Time pressure: {seed.time_pressure}",
-        f"- Available resources: {seed.resource_level}",
-        f"- External environment: {seed.external_event}",
-        f"- Decision-making style applied: {seed.decision_style}",
-        f"- Obstacle level: {seed.obstacle_level}",
     ]
+
+    # If we have an entity graph, use it as the primary world model
+    if seed.entity_context:
+        user_parts.append(seed.entity_context)
+        user_parts.append("")
+        user_parts.append("SIMULATION CONDITIONS:")
+        user_parts.append(f"- Time pressure: {seed.time_pressure}")
+        user_parts.append(f"- Decision-making style: {seed.decision_style}")
+        if seed.key_actor_name:
+            user_parts.append(f"- Focal actor: {seed.key_actor_name}")
+    else:
+        # Fallback: generic parameter variation
+        user_parts.extend([
+            "SIMULATION CONDITIONS:",
+            f"- Time pressure: {seed.time_pressure}",
+            f"- Available resources: {seed.resource_level}",
+            f"- External environment: {seed.external_event}",
+            f"- Decision-making style applied: {seed.decision_style}",
+            f"- Obstacle level: {seed.obstacle_level}",
+        ])
+
     if seed.key_decision:
         user_parts.append(f"- Forced decision tested: {seed.key_decision}")
-    if context:
+    if context and not seed.entity_context:
+        # Don't duplicate context if entity_context already incorporates it
         user_parts.extend(["", f"CONTEXT:\n{context}"])
 
     return [
@@ -216,6 +264,7 @@ class ScenarioSimulator:
         horizon_days: int = 30,
         context: str = "",
         forced_decisions: Optional[List[str]] = None,
+        entity_graph=None,       # Optional[EntityGraph] from entity_graph.py
         progress_callback=None,
     ) -> List[SimulationResult]:
         """
@@ -227,12 +276,18 @@ class ScenarioSimulator:
             horizon_days: How far into the future each simulation looks.
             context: Additional background that shapes simulations.
             forced_decisions: Specific decisions to test across simulations.
+            entity_graph: Optional EntityGraph for entity-aware scenarios.
             progress_callback: Optional fn(completed, total) for progress reporting.
 
         Returns:
             List of SimulationResult, sorted by outcome_score descending.
         """
-        seeds = generate_scenario_seeds(n_simulations, forced_decisions)
+        if entity_graph and entity_graph.entities:
+            logger.info(
+                "Running entity-aware simulations with %d entities",
+                len(entity_graph.entities),
+            )
+        seeds = generate_scenario_seeds(n_simulations, forced_decisions, entity_graph)
         results: List[SimulationResult] = []
         completed = 0
 

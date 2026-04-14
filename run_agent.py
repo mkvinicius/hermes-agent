@@ -2934,6 +2934,23 @@ class AIAgent:
         if platform_key in PLATFORM_HINTS:
             prompt_parts.append(PLATFORM_HINTS[platform_key])
 
+        # Pluggable Context Engine — inject registered context provider blocks
+        try:
+            from agent.context_engine import context_engine
+            if context_engine.has_providers():
+                ctx_blocks = context_engine.build_context(
+                    query=getattr(self, "_last_user_message", ""),
+                    history=None,
+                )
+                # top slot: inject near the beginning (insert after first part)
+                if ctx_blocks.get("top"):
+                    prompt_parts.insert(1, ctx_blocks["top"])
+                # footer slot: append at the end
+                if ctx_blocks.get("footer"):
+                    prompt_parts.append(ctx_blocks["footer"])
+        except Exception:
+            pass  # context engine is fully optional — never break agent startup
+
         return "\n\n".join(prompt_parts)
 
     # =========================================================================

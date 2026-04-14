@@ -17,6 +17,7 @@ from chronos.simulator import ScenarioSimulator, SimulationResult
 from chronos.causal_analyzer import CausalAnalyzer, Intervention
 from chronos.prescriptor import build_summary, format_as_json, format_as_text
 from chronos.temporal_db import TemporalDB
+from chronos.entity_graph import EntityExtractor, EntityGraph
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,7 @@ class ChronosEngine:
             model=model,
         )
         self._analyzer = CausalAnalyzer(model=model)
+        self._extractor = EntityExtractor(model=model)
         self._model = model
 
     # ------------------------------------------------------------------
@@ -92,6 +94,18 @@ class ChronosEngine:
             prediction_id, goal[:40], n_simulations, horizon_days,
         )
 
+        # --- Phase 0: Extract world model (MiroFish-inspired entity graph) ---
+        entity_graph: Optional[EntityGraph] = None
+        if context or len(goal) > 30:
+            logger.info("Extracting entity graph from goal + context...")
+            entity_graph = self._extractor.extract(goal, context)
+            if entity_graph.entities:
+                logger.info(
+                    "Entity graph: %d entities, %d relationships",
+                    len(entity_graph.entities),
+                    len(entity_graph.relationships),
+                )
+
         # --- Phase 1: Simulate futures ---
         simulation_results: List[SimulationResult] = self._simulator.run(
             goal=goal,
@@ -99,15 +113,20 @@ class ChronosEngine:
             horizon_days=horizon_days,
             context=context,
             forced_decisions=forced_decisions,
+            entity_graph=entity_graph,
             progress_callback=progress_callback,
         )
 
         # --- Phase 2: Find causal leverage ---
         leverage_history = self._get_leverage_history(domain)
+        # Enrich context with entity graph summary for better causal reasoning
+        analysis_context = context
+        if entity_graph and entity_graph.entities:
+            analysis_context = f"{context}\n\n{entity_graph.summary()}".strip()
         interventions: List[Intervention] = self._analyzer.analyze(
             goal=goal,
             results=simulation_results,
-            context=context,
+            context=analysis_context,
             leverage_history=leverage_history,
         )
 
@@ -146,6 +165,7 @@ class ChronosEngine:
             "interventions": [iv.to_dict() for iv in interventions],
             "simulation_results": [r.to_dict() for r in simulation_results],
             "summary": summary,
+            "entity_graph": entity_graph.to_dict() if entity_graph else None,
         }
 
         if output_format in ("json", "both"):
