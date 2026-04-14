@@ -201,6 +201,15 @@ TOOLSETS = {
         "includes": []
     },
 
+    "chronos": {
+        "description": (
+            "Temporal Causal Engine — simulates parallel futures to find the minimal "
+            "present-day interventions that converge the most scenarios toward a desired goal"
+        ),
+        "tools": ["chronos"],
+        "includes": []
+    },
+
 
     # Scenario-specific toolsets
     

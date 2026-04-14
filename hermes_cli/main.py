@@ -2660,6 +2660,51 @@ def cmd_webhook(args):
     webhook_command(args)
 
 
+def cmd_chronos(args):
+    """Chronos Temporal Causal Engine."""
+    from hermes_cli.chronos import (
+        chronos_analyze,
+        chronos_track,
+        chronos_show,
+        chronos_history,
+    )
+    subcmd = getattr(args, "chronos_command", None)
+    if subcmd == "analyze":
+        chronos_analyze(
+            goal=args.goal,
+            context=getattr(args, "context", "") or "",
+            simulations=getattr(args, "simulations", 30) or 30,
+            horizon=getattr(args, "horizon", 30) or 30,
+            domain=getattr(args, "domain", "") or "",
+            json_output=getattr(args, "json", False),
+        )
+    elif subcmd == "track":
+        chronos_track(
+            prediction_id=args.prediction_id,
+            intervention_id=args.intervention_id,
+            outcome=args.outcome,
+            success=getattr(args, "success", None),
+            delta=getattr(args, "delta", None),
+            notes=getattr(args, "notes", "") or "",
+        )
+    elif subcmd == "show":
+        chronos_show(
+            prediction_id=args.prediction_id,
+            json_output=getattr(args, "json", False),
+        )
+    elif subcmd == "history":
+        chronos_history(
+            limit=getattr(args, "limit", 10) or 10,
+            json_output=getattr(args, "json", False),
+        )
+    else:
+        print("Usage: hermes chronos <analyze|track|show|history>")
+        print("  analyze  Run temporal causal analysis for a goal")
+        print("  track    Record outcome of an applied intervention")
+        print("  show     Show a stored prediction by ID")
+        print("  history  List recent Chronos predictions")
+
+
 def cmd_doctor(args):
     """Check configuration and dependencies."""
     from hermes_cli.doctor import run_doctor
@@ -4701,6 +4746,64 @@ For more help on a command:
     cron_subparsers.add_parser("tick", help="Run due jobs once and exit")
 
     cron_parser.set_defaults(func=cmd_cron)
+
+    # =========================================================================
+    # chronos command
+    # =========================================================================
+    chronos_parser = subparsers.add_parser(
+        "chronos",
+        help="Temporal Causal Engine — find the leverage point that changes the future",
+        description=(
+            "Chronos simulates N parallel futures for a goal, identifies the minimal "
+            "present-day interventions that converge the most futures toward success, "
+            "and prescribes a ranked action plan."
+        ),
+    )
+    chronos_subparsers = chronos_parser.add_subparsers(dest="chronos_command")
+
+    # chronos analyze
+    ch_analyze = chronos_subparsers.add_parser(
+        "analyze",
+        help="Run temporal causal analysis for a goal",
+    )
+    ch_analyze.add_argument("goal", help="The desired outcome (e.g. 'Launch product by Q3')")
+    ch_analyze.add_argument("--context", default="", help="Background context: team size, constraints, current state")
+    ch_analyze.add_argument("--simulations", type=int, default=30, help="Number of parallel futures to simulate (default: 30)")
+    ch_analyze.add_argument("--horizon", type=int, default=30, help="Time horizon in days (default: 30)")
+    ch_analyze.add_argument("--domain", default="", help="Domain tag for historical leverage (e.g. product, health, business)")
+    ch_analyze.add_argument("--json", action="store_true", help="Output raw JSON instead of formatted report")
+
+    # chronos track
+    ch_track = chronos_subparsers.add_parser(
+        "track",
+        help="Record the outcome of an applied intervention (feedback loop)",
+    )
+    ch_track.add_argument("prediction_id", help="Prediction ID from a previous analyze call")
+    ch_track.add_argument("intervention_id", help="Intervention ID (e.g. iv_001)")
+    ch_track.add_argument("outcome", help="What actually happened after applying the intervention")
+    ch_track.add_argument("--success", type=lambda x: x.lower() == "true", default=None,
+                          help="Whether the outcome was positive (true/false)")
+    ch_track.add_argument("--delta", type=float, default=None,
+                          help="Outcome quality vs predicted (−1.0 to +1.0)")
+    ch_track.add_argument("--notes", default="", help="Additional notes")
+
+    # chronos show
+    ch_show = chronos_subparsers.add_parser(
+        "show",
+        help="Show a stored prediction by ID",
+    )
+    ch_show.add_argument("prediction_id", help="Prediction ID to display")
+    ch_show.add_argument("--json", action="store_true", help="Output raw JSON")
+
+    # chronos history
+    ch_history = chronos_subparsers.add_parser(
+        "history",
+        help="List recent Chronos predictions",
+    )
+    ch_history.add_argument("--limit", type=int, default=10, help="Number of predictions to show (default: 10)")
+    ch_history.add_argument("--json", action="store_true", help="Output raw JSON")
+
+    chronos_parser.set_defaults(func=cmd_chronos)
 
     # =========================================================================
     # webhook command
