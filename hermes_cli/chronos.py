@@ -48,6 +48,7 @@ def chronos_analyze(
     simulations: int = 30,
     horizon: int = 30,
     domain: str = "",
+    preset: str = "balanced",
     json_output: bool = False,
 ):
     """
@@ -55,12 +56,27 @@ def chronos_analyze(
 
     Usage:
         hermes chronos analyze "Launch mobile app by Q3"
-        hermes chronos analyze "Close the Series A" --context="We have 3 months runway" --simulations=50
+        hermes chronos analyze "Close the Series A" --context="3 months runway" --simulations=50
+        hermes chronos analyze "Lose 10kg" --preset=budget --simulations=100
     """
     _print_banner()
-    print(color(f"Goal: {goal}", Colors.BOLD if hasattr(Colors, 'BOLD') else Colors.CYAN))
-    print(color(f"Running {simulations} parallel simulations over {horizon}-day horizon...", Colors.DIM))
+    print(color(f"Goal: {goal}", Colors.BOLD))
+    print(color(f"Preset: {preset} | {simulations} simulations | {horizon}-day horizon", Colors.DIM))
     print()
+
+    # Show cost estimate before running
+    try:
+        from chronos.model_tiers import PRESETS, ChronosModelConfig
+        if preset in PRESETS:
+            cfg = PRESETS[preset]
+        else:
+            cfg = ChronosModelConfig.resolve()
+        est = cfg.estimate_cost(simulations)
+        print(color(f"  Estimated cost: {est}", Colors.DIM))
+        print(color(f"  {cfg.describe()}", Colors.DIM))
+        print()
+    except Exception:
+        pass
 
     start = time.time()
     completed_sims = [0]
@@ -74,7 +90,8 @@ def chronos_analyze(
         print(f"\r  [{bar}] {done}/{total}", end="", flush=True)
 
     try:
-        engine = _get_engine()
+        from chronos.engine import ChronosEngine
+        engine = ChronosEngine(preset=preset)
         output = engine.analyze(
             goal=goal,
             context=context,
@@ -86,7 +103,7 @@ def chronos_analyze(
         )
     except Exception as e:
         print()
-        print(color(f"Error: {e}", Colors.RED if hasattr(Colors, 'RED') else Colors.DIM))
+        print(color(f"Error: {e}", Colors.RED))
         sys.exit(1)
 
     elapsed = time.time() - start
@@ -97,6 +114,10 @@ def chronos_analyze(
         print(json.dumps(output["json_report"], indent=2, ensure_ascii=False))
     else:
         print(output["text_report"])
+
+    cost = output.get("cost_estimate", "")
+    if cost:
+        print(color(f"  Cost estimate: {cost}", Colors.DIM))
 
     print(color(
         f"  Prediction saved. ID: {output['prediction_id']}",

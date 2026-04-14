@@ -18,6 +18,7 @@ from chronos.causal_analyzer import CausalAnalyzer, Intervention
 from chronos.prescriptor import build_summary, format_as_json, format_as_text
 from chronos.temporal_db import TemporalDB
 from chronos.entity_graph import EntityExtractor, EntityGraph
+from chronos.model_tiers import ChronosModelConfig, PRESETS
 
 logger = logging.getLogger(__name__)
 
@@ -31,7 +32,22 @@ class ChronosEngine:
     that converge the most futures toward success.
 
     Usage:
+        # Auto (Hermes picks best available model for each tier)
         engine = ChronosEngine()
+
+        # Named preset
+        engine = ChronosEngine(preset="budget")   # Gemini Flash sims + Haiku analysis
+        engine = ChronosEngine(preset="balanced")  # GPT-4o-mini sims + Sonnet analysis
+        engine = ChronosEngine(preset="premium")   # Haiku sims + Opus analysis
+        engine = ChronosEngine(preset="local")     # Llama3.3 sims + Qwen2.5 analysis (free)
+        engine = ChronosEngine(preset="xai")       # Grok-fast sims + Grok-4 analysis
+
+        # Full custom control
+        engine = ChronosEngine(
+            simulation_model="google/gemini-2.0-flash-exp",
+            analysis_model="anthropic/claude-opus-4-6",
+        )
+
         result = engine.analyze(
             goal="Launch product by Q3",
             context="We have a 5-person team and 3 months of runway",
@@ -39,22 +55,54 @@ class ChronosEngine:
             horizon_days=90,
         )
         print(result["text_report"])
+        print(result["cost_estimate"])   # e.g. "~$0.018"
     """
 
     def __init__(
         self,
         db_path: Optional[str] = None,
+        # Legacy single-model arg (all tiers use same model)
         model: Optional[str] = None,
-        max_sim_workers: int = 8,
+        # Named preset: "budget" | "balanced" | "premium" | "local" | "xai"
+        preset: Optional[str] = None,
+        # Per-tier overrides (take precedence over preset and env vars)
+        simulation_model:  Optional[str] = None,
+        analysis_model:    Optional[str] = None,
+        summary_model:     Optional[str] = None,
+        extract_model:     Optional[str] = None,
+        max_sim_workers:   Optional[int] = None,
     ):
+        # Resolve model config: explicit args > preset > env vars > config.yaml > auto
+        if preset and preset in PRESETS:
+            base = PRESETS[preset]
+            self._model_cfg = ChronosModelConfig(
+                simulation_model  = simulation_model  or base.simulation_model,
+                analysis_model    = analysis_model    or base.analysis_model,
+                summary_model     = summary_model     or base.summary_model,
+                extract_model     = extract_model     or base.extract_model,
+                max_sim_workers   = max_sim_workers   or base.max_sim_workers,
+            )
+        else:
+            # Legacy: if single `model` arg passed, use it for all tiers
+            _fallback = model or None
+            self._model_cfg = ChronosModelConfig.resolve(
+                simulation_model  = simulation_model  or _fallback,
+                analysis_model    = analysis_model    or _fallback,
+                summary_model     = summary_model     or _fallback,
+                extract_model     = extract_model     or _fallback,
+                max_sim_workers   = max_sim_workers,
+            )
+
+        logger.info("ChronosEngine init: %s", self._model_cfg.describe())
+
         self._db = TemporalDB(db_path)
         self._simulator = ScenarioSimulator(
-            max_workers=max_sim_workers,
-            model=model,
+            max_workers=self._model_cfg.max_sim_workers,
+            model=self._model_cfg.simulation_model,
         )
-        self._analyzer = CausalAnalyzer(model=model)
-        self._extractor = EntityExtractor(model=model)
-        self._model = model
+        self._analyzer  = CausalAnalyzer(model=self._model_cfg.analysis_model)
+        self._extractor = EntityExtractor(model=self._model_cfg.extract_model)
+        self._model     = self._model_cfg.analysis_model  # for summary
 
     # ------------------------------------------------------------------
     # Primary interface
@@ -160,12 +208,21 @@ class ChronosEngine:
         )
 
         # --- Phase 5: Format output ---
+        cost_estimate = self._model_cfg.estimate_cost(n_simulations)
         output: Dict[str, Any] = {
             "prediction_id": prediction_id,
             "interventions": [iv.to_dict() for iv in interventions],
             "simulation_results": [r.to_dict() for r in simulation_results],
             "summary": summary,
             "entity_graph": entity_graph.to_dict() if entity_graph else None,
+            "cost_estimate": cost_estimate,
+            "model_tiers": {
+                "simulation":  self._model_cfg.simulation_model  or "auto",
+                "analysis":    self._model_cfg.analysis_model    or "auto",
+                "summary":     self._model_cfg.summary_model     or "auto",
+                "extraction":  self._model_cfg.extract_model     or "auto",
+                "sim_workers": self._model_cfg.max_sim_workers,
+            },
         }
 
         if output_format in ("json", "both"):

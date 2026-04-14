@@ -85,6 +85,19 @@ CHRONOS_SCHEMA = {
                     "E.g. 'product', 'health', 'business', 'personal'. Optional."
                 ),
             },
+            "preset": {
+                "type": "string",
+                "enum": ["budget", "balanced", "premium", "local", "xai"],
+                "description": (
+                    "[analyze] Model tier preset. "
+                    "'budget': Gemini Flash sims + Haiku analysis (~$0.004/50sims). "
+                    "'balanced': GPT-4o-mini sims + Sonnet analysis (~$0.018/50sims). "
+                    "'premium': Haiku sims + Opus analysis (~$0.12/50sims). "
+                    "'local': Llama3.3 + Qwen2.5 via Ollama (free). "
+                    "'xai': Grok-fast sims + Grok-4 analysis. "
+                    "Default: balanced."
+                ),
+            },
             "prediction_id": {
                 "type": "string",
                 "description": "[track] The prediction ID from a previous analyze call.",
@@ -142,6 +155,7 @@ def _handle_analyze(args: Dict[str, Any]) -> str:
     n_simulations = int(args.get("n_simulations", 30))
     horizon_days = int(args.get("horizon_days", 30))
     domain = args.get("domain", "")
+    preset = args.get("preset", "balanced")
 
     # Clamp to sane range
     n_simulations = max(5, min(n_simulations, 200))
@@ -149,9 +163,10 @@ def _handle_analyze(args: Dict[str, Any]) -> str:
 
     try:
         from chronos.engine import ChronosEngine
-        engine = ChronosEngine()
+        engine = ChronosEngine(preset=preset)
 
-        logger.info("Chronos analyze: goal='%s' n=%d horizon=%d", goal[:40], n_simulations, horizon_days)
+        logger.info("Chronos analyze: goal='%s' n=%d horizon=%d preset=%s",
+                    goal[:40], n_simulations, horizon_days, preset)
 
         output = engine.analyze(
             goal=goal,
