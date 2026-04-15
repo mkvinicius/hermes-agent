@@ -2688,7 +2688,7 @@ def cmd_chronos(args):
             simulations=getattr(args, "simulations", 30) or 30,
             horizon=getattr(args, "horizon", 30) or 30,
             domain=getattr(args, "domain", "") or "",
-            preset=getattr(args, "preset", "balanced") or "balanced",
+            preset=getattr(args, "preset", "premium") or "premium",
             json_output=getattr(args, "json", False),
         )
     elif subcmd == "track":
@@ -4785,15 +4785,15 @@ For more help on a command:
     ch_analyze.add_argument("--horizon", type=int, default=30, help="Time horizon in days (default: 30)")
     ch_analyze.add_argument("--domain", default="", help="Domain tag for historical leverage (e.g. product, health, business)")
     ch_analyze.add_argument(
-        "--preset", default="balanced",
-        choices=["budget", "balanced", "premium", "local", "xai"],
+        "--preset", default="premium",
+        choices=["ultra", "premium", "balanced", "xai", "budget"],
         help=(
-            "Model tier preset (default: balanced). "
-            "budget: Gemini Flash + Haiku (~$0.004/50sims) | "
-            "balanced: GPT-4o-mini + Sonnet (~$0.018/50sims) | "
-            "premium: Haiku + Opus (~$0.12/50sims) | "
-            "local: Llama3.3 + Qwen2.5 (free) | "
-            "xai: Grok-fast + Grok-4"
+            "Model tier preset (default: premium). "
+            "ultra: Sonnet sims + Opus analysis — max quality, 24 workers | "
+            "premium: Haiku sims + Opus analysis — best ratio, 20 workers | "
+            "balanced: GPT-4o sims + Opus analysis — cross-provider, 12 workers | "
+            "xai: full Grok-4 stack, 16 workers | "
+            "budget: Gemini Flash + Haiku"
         ),
     )
     ch_analyze.add_argument("--json", action="store_true", help="Output raw JSON instead of formatted report")

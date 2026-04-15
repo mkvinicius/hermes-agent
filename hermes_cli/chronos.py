@@ -48,7 +48,7 @@ def chronos_analyze(
     simulations: int = 30,
     horizon: int = 30,
     domain: str = "",
-    preset: str = "balanced",
+    preset: str = "premium",
     json_output: bool = False,
 ):
     """

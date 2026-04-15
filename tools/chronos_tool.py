@@ -87,15 +87,14 @@ CHRONOS_SCHEMA = {
             },
             "preset": {
                 "type": "string",
-                "enum": ["budget", "balanced", "premium", "local", "xai"],
+                "enum": ["ultra", "premium", "balanced", "xai", "budget"],
                 "description": (
-                    "[analyze] Model tier preset. "
-                    "'budget': Gemini Flash sims + Haiku analysis (~$0.004/50sims). "
-                    "'balanced': GPT-4o-mini sims + Sonnet analysis (~$0.018/50sims). "
-                    "'premium': Haiku sims + Opus analysis (~$0.12/50sims). "
-                    "'local': Llama3.3 + Qwen2.5 via Ollama (free). "
-                    "'xai': Grok-fast sims + Grok-4 analysis. "
-                    "Default: balanced."
+                    "[analyze] Model tier preset (default: premium). "
+                    "'ultra': Sonnet sims + Opus analysis — maximum quality, 24 workers. "
+                    "'premium': Haiku sims + Opus analysis — best speed/quality ratio, 20 workers. "
+                    "'balanced': GPT-4o sims + Opus analysis — cross-provider, 12 workers. "
+                    "'xai': full Grok-4 stack — 2M context, 16 workers. "
+                    "'budget': Gemini Flash + Haiku — minimal cost."
                 ),
             },
             "prediction_id": {
@@ -155,7 +154,7 @@ def _handle_analyze(args: Dict[str, Any]) -> str:
     n_simulations = int(args.get("n_simulations", 30))
     horizon_days = int(args.get("horizon_days", 30))
     domain = args.get("domain", "")
-    preset = args.get("preset", "balanced")
+    preset = args.get("preset", "premium")
 
     # Clamp to sane range
     n_simulations = max(5, min(n_simulations, 200))

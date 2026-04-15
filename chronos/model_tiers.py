@@ -216,6 +216,42 @@ class ChronosModelConfig:
 # ─── Pre-built tier presets ───────────────────────────────────────────────────
 
 PRESETS: dict[str, ChronosModelConfig] = {
+    # Ultra: every phase uses the absolute best available model.
+    # Simulations with Sonnet (not Haiku) = richer, more realistic futures.
+    # 24 parallel workers on a VPS saturates the API without throttling.
+    "ultra": ChronosModelConfig(
+        simulation_model="anthropic/claude-sonnet-4-6",
+        analysis_model="anthropic/claude-opus-4-6",
+        summary_model="anthropic/claude-opus-4-6",
+        extract_model="anthropic/claude-opus-4-6",
+        max_sim_workers=24,
+    ),
+    # Premium: Haiku for sims (still very strong, 5× faster than Sonnet),
+    # Opus for analysis and reasoning. Good balance of depth + speed on VPS.
+    "premium": ChronosModelConfig(
+        simulation_model="anthropic/claude-haiku-4-5-20251001",
+        analysis_model="anthropic/claude-opus-4-6",
+        summary_model="anthropic/claude-opus-4-6",
+        extract_model="anthropic/claude-sonnet-4-6",
+        max_sim_workers=20,
+    ),
+    # Balanced: GPT-4o for sims + Opus analysis. Strong cross-provider diversity.
+    "balanced": ChronosModelConfig(
+        simulation_model="openai/gpt-4o",
+        analysis_model="anthropic/claude-opus-4-6",
+        summary_model="anthropic/claude-sonnet-4-6",
+        extract_model="anthropic/claude-sonnet-4-6",
+        max_sim_workers=12,
+    ),
+    # xAI: full Grok stack. Grok-4 has 2M context — good for dense scenarios.
+    "xai": ChronosModelConfig(
+        simulation_model="xai/grok-4",
+        analysis_model="xai/grok-4",
+        summary_model="xai/grok-4",
+        extract_model="xai/grok-4",
+        max_sim_workers=16,
+    ),
+    # Budget (kept for reference / testing):
     "budget": ChronosModelConfig(
         simulation_model="google/gemini-2.0-flash-exp",
         analysis_model="anthropic/claude-haiku-4-5-20251001",
@@ -223,32 +259,7 @@ PRESETS: dict[str, ChronosModelConfig] = {
         extract_model="google/gemini-2.0-flash-exp",
         max_sim_workers=12,
     ),
-    "balanced": ChronosModelConfig(
-        simulation_model="openai/gpt-4o-mini",
-        analysis_model="anthropic/claude-sonnet-4-6",
-        summary_model="openai/gpt-4o-mini",
-        extract_model="openai/gpt-4o-mini",
-        max_sim_workers=8,
-    ),
-    "premium": ChronosModelConfig(
-        simulation_model="anthropic/claude-haiku-4-5-20251001",
-        analysis_model="anthropic/claude-opus-4-6",
-        summary_model="anthropic/claude-sonnet-4-6",
-        extract_model="anthropic/claude-sonnet-4-6",
-        max_sim_workers=6,
-    ),
-    "local": ChronosModelConfig(
-        simulation_model="ollama/llama3.3",
-        analysis_model="ollama/qwen2.5:32b",
-        summary_model="ollama/llama3.3",
-        extract_model="ollama/llama3.3",
-        max_sim_workers=4,
-    ),
-    "xai": ChronosModelConfig(
-        simulation_model="xai/grok-code-fast",
-        analysis_model="xai/grok-4",
-        summary_model="xai/grok-code-fast",
-        extract_model="xai/grok-code-fast",
-        max_sim_workers=8,
-    ),
 }
+
+# Default preset used when none is specified
+DEFAULT_PRESET = "premium"
